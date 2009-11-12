@@ -1,0 +1,5 @@
+V=$VIRTUAL_ENV
+ezdl='easy_install -b $V/src -e'
+cd $V
+
+export PIP_DOWNLOAD_CACHE=$V/build
