@@ -59,7 +59,7 @@ options(
             "jstools"],
         install_paver=True,
         script_name='bootstrap.py',
-        paver_command_line='post_bootstrap'
+        paver_command_line='after_bootstrap'
         ),
     )
 
@@ -79,7 +79,7 @@ def task_all_loaded(*needed):
                 raise ValueError("Cannot run if all commands are not loaded")
         return wrapper
     return all_wrap
-return task_all_loaded
+
 
 
 @task_all_loaded('generate_setup', 'minilib', 'setuptools.command.sdist')
