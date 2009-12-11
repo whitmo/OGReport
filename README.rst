@@ -27,3 +27,13 @@ at http://github.com/whitmo/loaf and report any bugs
 at http://github.com/loaf/loaf/issues.
 
 
+PostGIS
+=======
+
+Start postgres::
+
+   $ bin/postgres -D /Users/whit/dev/loaf/var/pgdata
+
+or::
+
+   $ bin/pg_ctl -D /Users/whit/dev/loaf/var/pgdata -l logfile start
