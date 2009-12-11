@@ -1,0 +1,635 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<HTML
+><HEAD
+><TITLE
+>PL/Python Functions</TITLE
+><META
+NAME="GENERATOR"
+CONTENT="Modular DocBook HTML Stylesheet Version 1.79"><LINK
+REV="MADE"
+HREF="mailto:pgsql-docs@postgresql.org"><LINK
+REL="HOME"
+TITLE="PostgreSQL 8.4.1 Documentation"
+HREF="index.html"><LINK
+REL="UP"
+TITLE="PL/Python - Python Procedural Language"
+HREF="plpython.html"><LINK
+REL="PREVIOUS"
+TITLE="PL/Python - Python Procedural Language"
+HREF="plpython.html"><LINK
+REL="NEXT"
+TITLE="Trigger Functions"
+HREF="plpython-trigger.html"><LINK
+REL="STYLESHEET"
+TYPE="text/css"
+HREF="stylesheet.css"><META
+HTTP-EQUIV="Content-Type"
+CONTENT="text/html; charset=ISO-8859-1"><META
+NAME="creation"
+CONTENT="2009-09-04T00:56:06"></HEAD
+><BODY
+CLASS="SECT1"
+><DIV
+CLASS="NAVHEADER"
+><TABLE
+SUMMARY="Header navigation table"
+WIDTH="100%"
+BORDER="0"
+CELLPADDING="0"
+CELLSPACING="0"
+><TR
+><TH
+COLSPAN="5"
+ALIGN="center"
+VALIGN="bottom"
+>PostgreSQL 8.4.1 Documentation</TH
+></TR
+><TR
+><TD
+WIDTH="10%"
+ALIGN="left"
+VALIGN="top"
+><A
+HREF="plpython.html"
+ACCESSKEY="P"
+>Prev</A
+></TD
+><TD
+WIDTH="10%"
+ALIGN="left"
+VALIGN="top"
+><A
+HREF="plpython.html"
+>Fast Backward</A
+></TD
+><TD
+WIDTH="60%"
+ALIGN="center"
+VALIGN="bottom"
+>Chapter 41. PL/Python - Python Procedural Language</TD
+><TD
+WIDTH="10%"
+ALIGN="right"
+VALIGN="top"
+><A
+HREF="plpython.html"
+>Fast Forward</A
+></TD
+><TD
+WIDTH="10%"
+ALIGN="right"
+VALIGN="top"
+><A
+HREF="plpython-trigger.html"
+ACCESSKEY="N"
+>Next</A
+></TD
+></TR
+></TABLE
+><HR
+ALIGN="LEFT"
+WIDTH="100%"></DIV
+><DIV
+CLASS="SECT1"
+><H1
+CLASS="SECT1"
+><A
+NAME="PLPYTHON-FUNCS"
+>41.1. PL/Python Functions</A
+></H1
+><P
+>   Functions in PL/Python are declared via the standard <A
+HREF="sql-createfunction.html"
+><I
+>CREATE FUNCTION</I
+></A
+>
+   syntax:
+
+</P><PRE
+CLASS="PROGRAMLISTING"
+>CREATE FUNCTION <TT
+CLASS="REPLACEABLE"
+><I
+>funcname</I
+></TT
+> (<TT
+CLASS="REPLACEABLE"
+><I
+>argument-list</I
+></TT
+>)
+  RETURNS <TT
+CLASS="REPLACEABLE"
+><I
+>return-type</I
+></TT
+>
+AS $$
+  # PL/Python function body
+$$ LANGUAGE plpythonu;</PRE
+><P>
+  </P
+><P
+>   The body of a function is simply a Python script. When the function
+   is called, its arguments are passed as elements of the array
+   <TT
+CLASS="VARNAME"
+>args[]</TT
+>; named arguments are also passed as ordinary
+   variables to the Python script. The result is returned from the Python code
+   in the usual way, with <TT
+CLASS="LITERAL"
+>return</TT
+> or
+   <TT
+CLASS="LITERAL"
+>yield</TT
+> (in case of a result-set statement).
+  </P
+><P
+>   For example, a function to return the greater of two integers can be
+   defined as:
+
+</P><PRE
+CLASS="PROGRAMLISTING"
+>CREATE FUNCTION pymax (a integer, b integer)
+  RETURNS integer
+AS $$
+  if a &gt; b:
+    return a
+  return b
+$$ LANGUAGE plpythonu;</PRE
+><P>
+
+   The Python code that is given as the body of the function definition
+   is transformed into a Python function. For example, the above results in:
+
+</P><PRE
+CLASS="PROGRAMLISTING"
+>def __plpython_procedure_pymax_23456():
+  if a &gt; b:
+    return a
+  return b</PRE
+><P>
+
+   assuming that 23456 is the OID assigned to the function by
+   <SPAN
+CLASS="PRODUCTNAME"
+>PostgreSQL</SPAN
+>.
+  </P
+><P
+>   The <SPAN
+CLASS="PRODUCTNAME"
+>PostgreSQL</SPAN
+> function parameters are available in
+   the global <TT
+CLASS="VARNAME"
+>args</TT
+> list.  In the
+   <CODE
+CLASS="FUNCTION"
+>pymax</CODE
+> example, <TT
+CLASS="VARNAME"
+>args[0]</TT
+> contains
+   whatever was passed in as the first argument and
+   <TT
+CLASS="VARNAME"
+>args[1]</TT
+> contains the second argument's
+   value. Alternatively, one can use named parameters as shown in the example
+   above.  Use of named parameters is usually more readable.
+  </P
+><P
+>   If an SQL null value<A
+NAME="AEN49696"
+></A
+> is passed to a
+   function, the argument value will appear as <TT
+CLASS="SYMBOL"
+>None</TT
+> in
+   Python. The above function definition will return the wrong answer for null
+   inputs. We could add <TT
+CLASS="LITERAL"
+>STRICT</TT
+> to the function definition
+   to make <SPAN
+CLASS="PRODUCTNAME"
+>PostgreSQL</SPAN
+> do something more reasonable:
+   if a null value is passed, the function will not be called at all,
+   but will just return a null result automatically. Alternatively,
+   we could check for null inputs in the function body:
+
+</P><PRE
+CLASS="PROGRAMLISTING"
+>CREATE FUNCTION pymax (a integer, b integer)
+  RETURNS integer
+AS $$
+  if (a is None) or (b is None):
+    return None
+  if a &gt; b:
+    return a
+  return b
+$$ LANGUAGE plpythonu;</PRE
+><P>
+
+   As shown above, to return an SQL null value from a PL/Python
+   function, return the value <TT
+CLASS="SYMBOL"
+>None</TT
+>. This can be done whether the
+   function is strict or not.
+  </P
+><P
+>   Composite-type arguments are passed to the function as Python mappings. The
+   element names of the mapping are the attribute names of the composite type.
+   If an attribute in the passed row has the null value, it has the value
+   <TT
+CLASS="SYMBOL"
+>None</TT
+> in the mapping. Here is an example:
+
+</P><PRE
+CLASS="PROGRAMLISTING"
+>CREATE TABLE employee (
+  name text,
+  salary integer,
+  age integer
+);
+
+CREATE FUNCTION overpaid (e employee)
+  RETURNS boolean
+AS $$
+  if e["salary"] &gt; 200000:
+    return True
+  if (e["age"] &lt; 30) and (e["salary"] &gt; 100000):
+    return True
+  return False
+$$ LANGUAGE plpythonu;</PRE
+><P>
+  </P
+><P
+>   There are multiple ways to return row or composite types from a Python
+   function. The following examples assume we have:
+
+</P><PRE
+CLASS="PROGRAMLISTING"
+>CREATE TYPE named_value AS (
+  name   text,
+  value  integer
+);</PRE
+><P>
+
+   A composite result can be returned as a:
+
+   <P
+></P
+></P><DIV
+CLASS="VARIABLELIST"
+><DL
+><DT
+>Sequence type (a tuple or list, but not a set because
+     it is not indexable)</DT
+><DD
+><P
+>       Returned sequence objects must have the same number of items as the
+       composite result type has fields. The item with index 0 is assigned to
+       the first field of the composite type, 1 to the second and so on. For
+       example:
+
+</P><PRE
+CLASS="PROGRAMLISTING"
+>CREATE FUNCTION make_pair (name text, value integer)
+  RETURNS named_value
+AS $$
+  return [ name, value ]
+  # or alternatively, as tuple: return ( name, value )
+$$ LANGUAGE plpythonu;</PRE
+><P>
+
+       To return a SQL null for any column, insert <TT
+CLASS="SYMBOL"
+>None</TT
+> at
+       the corresponding position.
+      </P
+></DD
+><DT
+>Mapping (dictionary)</DT
+><DD
+><P
+>       The value for each result type column is retrieved from the mapping
+       with the column name as key. Example:
+
+</P><PRE
+CLASS="PROGRAMLISTING"
+>CREATE FUNCTION make_pair (name text, value integer)
+  RETURNS named_value
+AS $$
+  return { "name": name, "value": value }
+$$ LANGUAGE plpythonu;</PRE
+><P>
+
+       Any extra dictionary key/value pairs are ignored. Missing keys are
+       treated as errors.
+       To return a SQL null value for any column, insert
+       <TT
+CLASS="SYMBOL"
+>None</TT
+> with the corresponding column name as the key.
+      </P
+></DD
+><DT
+>Object (any object providing method <TT
+CLASS="LITERAL"
+>__getattr__</TT
+>)</DT
+><DD
+><P
+>       This works the same as a mapping.
+       Example:
+
+</P><PRE
+CLASS="PROGRAMLISTING"
+>CREATE FUNCTION make_pair (name text, value integer)
+  RETURNS named_value
+AS $$
+  class named_value:
+    def __init__ (self, n, v):
+      self.name = n
+      self.value = v
+  return named_value(name, value)
+
+  # or simply
+  class nv: pass
+  nv.name = name
+  nv.value = value
+  return nv
+$$ LANGUAGE plpythonu;</PRE
+><P>
+      </P
+></DD
+></DL
+></DIV
+><P>
+  </P
+><P
+>   If you do not provide a return value, Python returns the default
+   <TT
+CLASS="SYMBOL"
+>None</TT
+>. <SPAN
+CLASS="APPLICATION"
+>PL/Python</SPAN
+> translates
+   Python's <TT
+CLASS="SYMBOL"
+>None</TT
+> into the SQL null value.
+  </P
+><P
+>   A <SPAN
+CLASS="APPLICATION"
+>PL/Python</SPAN
+> function can also return sets of
+   scalar or composite types. There are several ways to achieve this because
+   the returned object is internally turned into an iterator. The following
+   examples assume we have composite type:
+
+</P><PRE
+CLASS="PROGRAMLISTING"
+>CREATE TYPE greeting AS (
+  how text,
+  who text
+);</PRE
+><P>
+   
+   A set result can be returned from a:
+
+   <P
+></P
+></P><DIV
+CLASS="VARIABLELIST"
+><DL
+><DT
+>Sequence type (tuple, list, set)</DT
+><DD
+><P
+></P><PRE
+CLASS="PROGRAMLISTING"
+>CREATE FUNCTION greet (how text)
+  RETURNS SETOF greeting
+AS $$
+  # return tuple containing lists as composite types
+  # all other combinations work also
+  return ( [ how, "World" ], [ how, "PostgreSQL" ], [ how, "PL/Python" ] )
+$$ LANGUAGE plpythonu;</PRE
+><P>
+      </P
+></DD
+><DT
+>Iterator (any object providing <TT
+CLASS="SYMBOL"
+>__iter__</TT
+> and
+      <TT
+CLASS="SYMBOL"
+>next</TT
+> methods)</DT
+><DD
+><P
+></P><PRE
+CLASS="PROGRAMLISTING"
+>CREATE FUNCTION greet (how text)
+  RETURNS SETOF greeting
+AS $$
+  class producer:
+    def __init__ (self, how, who):
+      self.how = how
+      self.who = who
+      self.ndx = -1
+
+    def __iter__ (self):
+      return self
+
+    def next (self):
+      self.ndx += 1
+      if self.ndx == len(self.who):
+        raise StopIteration
+      return ( self.how, self.who[self.ndx] )
+
+  return producer(how, [ "World", "PostgreSQL", "PL/Python" ])
+$$ LANGUAGE plpythonu;</PRE
+><P>
+      </P
+></DD
+><DT
+>Generator (<TT
+CLASS="LITERAL"
+>yield</TT
+>)</DT
+><DD
+><P
+></P><PRE
+CLASS="PROGRAMLISTING"
+>CREATE FUNCTION greet (how text)
+  RETURNS SETOF greeting
+AS $$
+  for who in [ "World", "PostgreSQL", "PL/Python" ]:
+    yield ( how, who )
+$$ LANGUAGE plpythonu;</PRE
+><P>
+
+       <DIV
+CLASS="WARNING"
+><P
+></P
+><TABLE
+CLASS="WARNING"
+BORDER="1"
+WIDTH="90%"
+><TR
+><TD
+ALIGN="CENTER"
+><B
+>Warning</B
+></TD
+></TR
+><TR
+><TD
+ALIGN="LEFT"
+><P
+>         Currently, due to Python 
+         <A
+HREF="http://bugs.python.org/issue1483133"
+TARGET="_top"
+>bug #1483133</A
+>,
+         some debug versions of Python 2.4
+         (configured and compiled with option <TT
+CLASS="LITERAL"
+>--with-pydebug</TT
+>)
+         are known to crash the <SPAN
+CLASS="PRODUCTNAME"
+>PostgreSQL</SPAN
+> server
+         when using an iterator to return a set result.
+         Unpatched versions of Fedora 4 contain this bug.
+         It does not happen in production versions of Python or on patched
+         versions of Fedora 4.
+        </P
+></TD
+></TR
+></TABLE
+></DIV
+>
+      </P
+></DD
+></DL
+></DIV
+><P>
+  </P
+><P
+>   The global dictionary <TT
+CLASS="VARNAME"
+>SD</TT
+> is available to store
+   data between function calls.  This variable is private static data.
+   The global dictionary <TT
+CLASS="VARNAME"
+>GD</TT
+> is public data,
+   available to all Python functions within a session.  Use with
+   care.<A
+NAME="AEN49762"
+></A
+>
+  </P
+><P
+>   Each function gets its own execution environment in the
+   Python interpreter, so that global data and function arguments from
+   <CODE
+CLASS="FUNCTION"
+>myfunc</CODE
+> are not available to
+   <CODE
+CLASS="FUNCTION"
+>myfunc2</CODE
+>.  The exception is the data in the
+   <TT
+CLASS="VARNAME"
+>GD</TT
+> dictionary, as mentioned above.
+  </P
+></DIV
+><DIV
+CLASS="NAVFOOTER"
+><HR
+ALIGN="LEFT"
+WIDTH="100%"><TABLE
+SUMMARY="Footer navigation table"
+WIDTH="100%"
+BORDER="0"
+CELLPADDING="0"
+CELLSPACING="0"
+><TR
+><TD
+WIDTH="33%"
+ALIGN="left"
+VALIGN="top"
+><A
+HREF="plpython.html"
+ACCESSKEY="P"
+>Prev</A
+></TD
+><TD
+WIDTH="34%"
+ALIGN="center"
+VALIGN="top"
+><A
+HREF="index.html"
+ACCESSKEY="H"
+>Home</A
+></TD
+><TD
+WIDTH="33%"
+ALIGN="right"
+VALIGN="top"
+><A
+HREF="plpython-trigger.html"
+ACCESSKEY="N"
+>Next</A
+></TD
+></TR
+><TR
+><TD
+WIDTH="33%"
+ALIGN="left"
+VALIGN="top"
+>PL/Python - Python Procedural Language</TD
+><TD
+WIDTH="34%"
+ALIGN="center"
+VALIGN="top"
+><A
+HREF="plpython.html"
+ACCESSKEY="U"
+>Up</A
+></TD
+><TD
+WIDTH="33%"
+ALIGN="right"
+VALIGN="top"
+>Trigger Functions</TD
+></TR
+></TABLE
+></DIV
+></BODY
+></HTML
+>

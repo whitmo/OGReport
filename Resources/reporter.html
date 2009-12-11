@@ -1,0 +1,112 @@
+<html>
+  <head>
+    <title>Report</title>
+
+    <link href="index.css" rel="stylesheet" type="text/css">
+  </head>
+  <body style="font-family:'Helvetica Neue';font-size:11px">
+    <div id="info">
+    </div>
+    <div style="margin-bottom:5px">Use text</div>
+    <div id="with_text" style="height:30px"></div>
+    <div style="margin-bottom:5px;height:10px">Use photo</div>
+    <div id="with_photo" style="height:30px"></div>
+    <div id="report" style="height:60px"></div>
+
+    <script type="text/javascript">
+
+      // observe state for switches
+      var switch_vals = {
+         photo:true,
+         text:true
+      };
+      console.log("HOLA");
+      console.log(switch_vals.photo)
+      var wtext = Titanium.UI.createSwitch({
+         id:'with_text',
+         value:switch_vals.text
+      });
+      wtext.addEventListener('change', function(e){
+        switch_vals.text = e.value
+      });
+
+      var wphoto = Titanium.UI.createSwitch({
+         id:'with_photo',
+         value:switch_vals.photo
+      });
+
+      wphoto.addEventListener('change', function(e){
+        switch_vals.photo = e.value
+      });
+
+      var report = Titanium.UI.createButton({
+        id:'report',
+        title:'Report for Location',
+        color:'#336699',
+        height:40,
+        width:200,
+        fontSize:12,
+        fontWeight:'bold'
+      });
+
+      var entry_view = Titanium.UI.createWebView({url:'entry.html', name:'entry', image_url:null});
+      Titanium.UI.currentWindow.addView(entry_view);
+      function showEntry(image){
+        if(image != null){
+          entry_view.image_url = image.url;
+        }
+
+        Titanium.UI.currentWindow.showView(entry_view, {animated:true});
+      };
+
+      function cam_error(error)
+        {
+          // create alert
+          var a = Titanium.UI.createAlertDialog();
+
+          // set title
+          a.setTitle('Camera Error');
+
+         // set message
+         if (error.code == Titanium.Media.NO_CAMERA)
+         {
+          a.setMessage('Device does not have camera');
+         }
+         else
+         {
+           a.setMessage('Unexpected error: ' + error.code);
+         }
+         a.setButtonNames(['OK']);
+         a.show();
+       };
+
+      function doReport(e){
+        console.log('clicked button')
+        var a = Titanium.UI.createAlertDialog();
+        a.setTitle('Button Test');
+        var p = switch_vals.photo
+        var t = switch_vals.text
+        if(p == true){
+          // dialog wrt gallery vs. camera
+          Titanium.Media.showCamera({
+            success:function(image, details){
+              showEntry(image);
+            },
+            cancel:function(){
+            },
+            error:cam_error,
+            allowImageEditing:true,  
+          });
+        } else {
+         if(t == true){
+           showEntry();
+         } else {
+           console.log("PUSH Location");
+         }
+        }
+      };
+      report.addEventListener('click', doReport);
+    </script>
+
+  </body>
+</html>

@@ -1,0 +1,147 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+         "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<title>iOL Editor</title>
+<meta name="viewport" content="width=device-width; initial-scale=1.0; maximum-scale=1.0; user-scalable=0;"/>
+<style>
+    body { height:100%; width:100%; margin:0; padding:0; overflow:hidden; }
+    #map {
+        height: 100%;
+        z-index: 1;
+        padding: 0px !important;
+    }
+    .thin {
+        min-height: 21px;
+    }
+</style>
+<script type="application/x-javascript" src="../script/OpenLayers.js"></script>
+<!--<script type="application/x-javascript" src="../externals/openlayers/lib/OpenLayers.js"></script>-->
+<!--<script type="application/x-javascript" src="../lib/loader.js"></script>-->
+<!--<script type="application/x-javascript" src="../script/xlog.js">-->
+<!--    var url = "http://localhost/cgi-bin/xlog.cgi";-->
+<!--    OpenLayers.Console.log = xlog.log;-->
+<!--</script>-->
+<style type="text/css" media="screen">@import "iui/web-app/iui/iui.css";</style>
+<script type="application/x-javascript" src="iui/web-app/iui/iui.js"></script>
+<script type="application/x-javascript" src="../script/IOL.js"></script>
+<script type="application/x-javascript">
+    function register(key) {
+        $(key).addEventListener("change", function() {
+            activate(key);
+        }, false);
+    }
+    
+    function activate(key) {
+        for(var k in tools) {
+            if(k == key) {
+                tools[k].activate();
+            } else {
+                tools[k].deactivate();
+            }
+        }
+    }
+    
+    var map, vectors, tools;
+    function init() {
+        
+        register("navigate");
+        register("point");
+        register("line");
+        register("polygon");
+        
+        $("delete").onclick = function() {
+            var features = vectors.features;
+            for(var i=0, len=features.length; i<len; ++i) {
+                features[i].state = OpenLayers.State.DELETE;
+            }
+            vectors.strategies[1].save();
+            return false;
+        };
+        
+        vectors = new OpenLayers.Layer.Vector("Vectors", {
+            strategies: [
+                new OpenLayers.Strategy.Fixed(),
+                new IOL.Strategy.Save({auto: true})
+            ],
+            protocol: new IOL.Protocol.HTML5()
+        });
+        
+        tools = {
+            point: new OpenLayers.Control.DrawFeature(
+                vectors, IOL.Handler.Point
+            ),
+            line: new OpenLayers.Control.DrawFeature(
+                vectors, IOL.Handler.Path
+            ),
+            polygon: new OpenLayers.Control.DrawFeature(
+                vectors, IOL.Handler.Polygon
+            )
+        };
+
+        map = new OpenLayers.Map('map', {
+            controls: [
+                new IOL.Control.Navigation(), tools.point, tools.line, tools.polygon
+            ],
+            maxResolution: 156543.03390625,
+            maxExtent: new OpenLayers.Bounds(
+                -2.003750834E7,-2.003750834E7,
+                2.003750834E7,2.003750834E7
+            ),
+            projection: "EPSG:900913",             
+            numZoomLevels: 7
+        });
+        
+        var wms = new OpenLayers.Layer.WMS(
+            "Base Layer", "http://demo.opengeo.org/geoserver_openstreetmap/gwc/service/wms",
+            {
+                layers: 'openstreetmap',
+                format: 'image/png'
+            }
+        );
+
+        map.addLayers([wms, vectors]);
+
+        map.setCenter(new OpenLayers.LonLat(-80, 33), 3);
+    }
+
+    window.addEventListener("load", init, false);
+</script>
+</head>
+
+<body>
+    <div class="toolbar">
+        <h1 id="pageTitle"></h1>
+        <a id="backButton" class="button" href="#"></a>
+        <a class="button" href="#controlPanel">Tools</a>
+    </div>
+    <form id="controlPanel" class="dialog">
+        <fieldset>
+            <h1>Tools</h1>
+            <a class="button blueButton" type="cancel">Done</a>
+            <div class="row thin"></div>
+            <div class="row">
+                <label for="navigate">Navigate</label>
+                <input id="navigate" type="radio" name="draw" checked="checked"/>
+            </div>            
+            <div class="row">
+                <label for="point">Draw Points</label>
+                <input id="point" type="radio" name="draw" />
+            </div>            
+            <div class="row">
+                <label for="line">Draw Lines</label>
+                <input id="line" type="radio" name="draw" />
+            </div>            
+            <div class="row">
+                <label for="polygon">Draw Polygons</label>
+                <input id="polygon" type="radio" name="draw" />
+            </div>
+            <div class="row">
+                <label for="delete">Delete Features</label>
+                <a class="button" id="delete" target="foo">delete</a>
+            </div>            
+        </fieldset>
+    </form>
+</body>
+</html>

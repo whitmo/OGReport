@@ -1,3 +1,5 @@
 Django
 PasteDeploy
+GDAL
+psycopg2
 

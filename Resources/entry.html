@@ -1,0 +1,53 @@
+<html>
+  <head>
+  </head>
+  <body style="font-family:'Helvetica Neue';font-size:11px">
+    <div id="img"></div>
+    <div id="title" style="height:35px"></div>
+    <div style="margin-bottom:5px;height:10px">Description</div>	
+    <div id="note" style="height:200px"></div>
+
+    <div id="title" style="height:35px"></div>
+
+    <div id="submit" style="height:60px"></div>
+    <script type="text/javascript">
+      console.log(document.image_url);
+      var title = Titanium.UI.createTextField({
+		id:'',
+		value:'Title',
+		color:'#336699',
+		enableReturnKey:true,
+		keyboardType:Titanium.UI.KEYBOARD_ASCII,
+		autocorrect:false,
+		hintText:'what sort of note?',
+		textAlign:'left',
+		clearOnEdit:true,
+		height:35,
+		borderStyle:Titanium.UI.INPUT_BORDERSTYLE_ROUNDED
+	});
+	var description = Titanium.UI.createTextArea({
+		id:'description', 
+		value:'I am a textarea',
+		height:200,
+		width:300,
+		borderStyle:Titanium.UI.INPUT_BORDERSTYLE_ROUNDED
+	});
+
+      var submit = Titanium.UI.createButton({
+        id:'submit',
+        title:'Submit Report',
+        color:'#336699',
+        height:40,
+        width:200,
+        fontSize:12,
+        fontWeight:'bold'
+      });
+
+      submit.addEventListener('click', function(e){
+        console.log(title.value)
+        console.log(description.value)
+      });
+
+    </script>    
+  </body>
+</html>
