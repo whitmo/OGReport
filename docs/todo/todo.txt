@@ -1,3 +1,4 @@
 build iol js p:build @loaf
 setup webapp per http://www.geoalchemy.org/featureserver.html
 fix up reporting app interface
+teach report app to speak wfs
