@@ -4,7 +4,7 @@
 """Create a "virtual" Python installation
 """
 
-virtualenv_version = "1.4.2"
+virtualenv_version = "1.4.3"
 
 import sys
 import os
@@ -1125,12 +1125,7 @@ def after_install(options, home_dir):
     else:
         bin_dir = join(home_dir, 'bin')
     subprocess.call([join(bin_dir, 'easy_install'), 'paver==1.0.1'])
-    subprocess.call([join(bin_dir, 'easy_install'), 'github-tools'])
-    subprocess.call([join(bin_dir, 'easy_install'), 'nose'])
-    subprocess.call([join(bin_dir, 'easy_install'), 'Sphinx>=0.6b1'])
-    subprocess.call([join(bin_dir, 'easy_install'), 'virtualenv'])
-    subprocess.call([join(bin_dir, 'easy_install'), 'setuptools_git'])
-    subprocess.call([join(bin_dir, 'easy_install'), 'jstools'])
+    subprocess.call([join(bin_dir, 'easy_install'), 'pip'])
     subprocess.call([join(bin_dir, 'paver'),'after_bootstrap'])
 
 ##file site.py
