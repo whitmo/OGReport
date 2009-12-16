@@ -2,4 +2,9 @@ Django
 PasteDeploy
 GDAL
 psycopg2
-
+geoalchemy
+sqlalchemy
+repoze.debug
+#egenix-mx-base # not pip installable
+-i http://www.turbogears.org/2.0/downloads/current/index/ 
+tgext.geo
