@@ -1,3 +1,4 @@
+setuptools_git
 Django
 PasteDeploy
 GDAL
@@ -5,6 +6,14 @@ psycopg2
 geoalchemy
 sqlalchemy
 repoze.debug
+github-tools
+nose
+Sphinx>=0.6b1
+virtualenv
+jstools
+urlgrabber
+Eventlet
+
 #egenix-mx-base # not pip installable
 -i http://www.turbogears.org/2.0/downloads/current/index/ 
 tgext.geo
