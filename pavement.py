@@ -1,31 +1,33 @@
 """
 pavement: my fair yak
 """
-from functools import wraps, update_wrapper
 from paver.easy import *
+try:
+    import eventlet.util
+    eventlet.util.wrap_socket_with_coroutine_socket()
+except ImportError:
+    info("Socket not overridden")
+
+from paver.tasks import Task
+from functools import wraps, update_wrapper
 from paver.setuputils import setup
 from setuptools import find_packages
-from sqlalchemy import sql
-from urlgrabber.grabber import urlgrab, URLGrabError
-from urlgrabber.progress import text_progress_meter
 import ConfigParser
-import eventlet.api
-import eventlet.coros
-import eventlet.processes as proc
-import eventlet.util
 import getpass
 import pwd
 import shutil
 import socket
-import sqlalchemy as sqla
 import sys
 import tarfile
 import time
 import contextlib
 import functools
 
+# must install psycopg2??
+# GDAL
+
 close = contextlib.closing
-eventlet.util.wrap_socket_with_coroutine_socket()
+
 
 version = '0.1'
 
@@ -75,19 +77,7 @@ options(
         sourcedir=""
         ),
     virtualenv=Bunch(
-        packages_to_install=[
-            # -*- Virtualenv packages to install: -*-
-            'github-tools',
-            "nose",
-            "Sphinx>=0.6b1",
-            "virtualenv",
-            "setuptools_git",
-            "jstools",
-            "urlgrabber",
-            "eventlet",
-            "pip",
-            "psycopg2",
-            "sqlalchemy"],
+        packages_to_install=["pip"],
         install_paver=True,
         script_name='bootstrap.py',
         paver_command_line='after_bootstrap'
@@ -130,6 +120,16 @@ def save_config(func):
         return ret
     return wrapper
 
+def pm(func):
+    @functools.wraps(func)
+    def wrap(*args, **kw):
+        try:
+            return func(*args, **kw)
+        except Exception, e:
+            import pdb, sys; pdb.post_mortem(sys.exc_info()[2])
+    return wrap
+            
+
 
 def tarball_unpack(fpath, dest, overwrite=False):
     """
@@ -150,7 +150,7 @@ def tarball_unpack(fpath, dest, overwrite=False):
 
     dest_folder = dest / filename.split(".tar.")[0]
     if not dest_folder.exists() and overwrite:
-        shutil.copyfile(fpath.abspath(), newfile.abspath())
+        shutil.copyfile(str(fpath.abspath()), str(newfile.abspath()))
         with pushd(dest):#necessary?
             mode = "r:gz"
             if filename.endswith("bz2") or filename.endswith("bz"):
@@ -164,11 +164,11 @@ def tarball_unpack(fpath, dest, overwrite=False):
 
 @task
 @save_config
+@needs('make_src')
 def get_sources(options, key="postgis", ignore=['cbase']):
     config = options.config.parser
     pkgs = config.options(key)
     global pool
-    #pool = eventlet.coros.CoroutinePool(max_size=len(pkgs))
     pool = eventlet.coros.CoroutinePool(max_size=len(pkgs))
     for pkg in pkgs:
         if pkg not in ignore:
@@ -215,16 +215,22 @@ def install_postgis(options):
     call_task('pg_after_install')
 
 
-@task
-def vardir(options):
-    vardir = path(options.env) / 'var'
-    if not vardir.exists():
-        vardir.mkdir()
-    return vardir
+def mkdir(dirname):
+    def dirmaker(options):
+        if not isinstance(dirname, path):
+            tdir = path(options.env) / dirname
+        if not tdir.exists():
+            tdir.mkdir()
+    dirmaker.__name__ = "make_%s" %dirname
+    return Task(dirmaker)
+
+make_var = mkdir('var')
+make_src = mkdir('src')
 
 
+
 @task
-@needs('vardir')
+@needs('make_var')
 def pg_after_install(options):
     # set up postgres user
     try:
@@ -512,5 +518,15 @@ except ImportError, e:
     debug(str(e))
     ALL_TASKS_LOADED = False
 
+try:
+    import eventlet.api
+    import eventlet.coros
+    import eventlet.processes as proc
+    import sqlalchemy as sqla
+    from sqlalchemy import sql
+    from urlgrabber.grabber import urlgrab, URLGrabError
+    from urlgrabber.progress import text_progress_meter
 
+except ImportError:
+    info("Some libraries needed by the build not loaded")
 
