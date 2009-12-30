@@ -6,7 +6,7 @@ sqlalchemy
 repoze.debug
 github-tools
 nose
-Sphinx
+#Sphinx
 virtualenv
 jstools
 urlgrabber
