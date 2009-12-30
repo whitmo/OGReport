@@ -1,5 +1,5 @@
 """
-pavement: my fair yak
+Paver for setting up basic geo web stack
 """
 from paver.easy import *
 try:
@@ -8,11 +8,13 @@ try:
 except ImportError:
     info("Socket not overridden")
 
-from paver.tasks import Task
 from functools import wraps, update_wrapper
 from paver.setuputils import setup
+from paver.tasks import Task
 from setuptools import find_packages
 import ConfigParser
+import contextlib
+import functools
 import getpass
 import pwd
 import shutil
@@ -20,14 +22,8 @@ import socket
 import sys
 import tarfile
 import time
-import contextlib
-import functools
-
-# must install psycopg2??
-# GDAL
 
 close = contextlib.closing
-
 
 version = '0.1'
 
@@ -64,7 +60,8 @@ setup(
 
 options(
     # -*- Paver options: -*-
-    config = Bunch(ini = path('build.ini')),
+    config = Bunch(ini = path('build.ini'),
+                   state_ini = path('build_state.ini')),
     env = path('.').abspath(),
     minilib=Bunch(
         extra_files=[
@@ -93,25 +90,66 @@ default_pglog = options.env / path('var') / path('pgdata') / 'pg.log' # put in o
 
 @task
 def auto(options):
+    """
+    Sets up two configparsers: one for recording the state of the
+    build, one for reading data about what to build.
+
+    Adds the convenience functions 'options.conf_get' and
+    'options.conf_set' to safely read and write from both files while
+    ensuring the build.ini is never written
+    """
     cp = ConfigParser.ConfigParser()
+    state = ConfigParser.ConfigParser()
+    
     cp.read(options.config.ini)
+    state.read(options.config.state_ini)
+
+    options.config.state = state
+    options.config.build = cp
+
     options.config.parser = cp
     for opt, val in cp.items('general'):
         setattr(options, opt, val)
     options.save_conf = False
 
+    def conf_get(*args, **kw):
+        getter = kw.pop('type', 'get')
+        section = args[0]
+        try:
+            for parser in cp, state,:
+                if parser.has_section(section):
+                    return getattr(parser, getter)(*args, **kw)
+        except ConfigParser.NoOptionError:
+            default = kw.get('default', None)
+            if default is not None:
+                return default
+
     @functools.wraps(cp.set)
     def conf_set(*args, **kw):
         options.save_conf = True
-        return cp.set(*args, **kw)
+        return state.set(*args, **kw)
+
+    def opt_func(func):
+        functools.wraps(func)
+        def closure():
+            return func
+        return closure
     
-    options.conf_get = lambda : cp.get
-    options.conf_getbool = lambda : cp.getboolean
-    options.conf_set = lambda : conf_set
+    options.conf_get = opt_func(conf_get)
+    for t in 'getboolean', 'getint', 'getfloat',:
+        setattr(options,
+                "conf_%s" %t,
+                opt_func(functools.partial(conf_get, type=t)))
+
+    options.conf_set = opt_func(conf_set)
     options.app_path = options.env / path('src') / path(options.webapp_pkg)
 
 
 def save_config(func):
+    """
+    Decorator for functions that create changes that need to be
+    persisted to build_state.ini.
+    """
     @functools.wraps(func)
     def wrapper(options, *args, **kw):
         ret = func(options, *args, **kw)
@@ -121,6 +159,14 @@ def save_config(func):
     return wrapper
 
 def pm(func):
+    """
+    Debugging decorator.  Use like so to do postmortem debugging::
+
+    @pm
+    def troublesome():
+        raise HellException
+    
+    """
     @functools.wraps(func)
     def wrap(*args, **kw):
         try:
@@ -133,7 +179,7 @@ def pm(func):
 
 def tarball_unpack(fpath, dest, overwrite=False):
     """
-    Dumbly unpack tarballs and zips
+    Dumbly unpack tarballs and unzips. Plays nice with 'get_sources'.
 
     fpath --
        filepath of tarball
@@ -166,13 +212,15 @@ def tarball_unpack(fpath, dest, overwrite=False):
 @save_config
 @needs('make_src')
 def get_sources(options, key="postgis", ignore=['cbase']):
-    config = options.config.parser
-    pkgs = config.options(key)
+    """
+    Uses 'grab_unpack' to download source files concurrently.
+    """
+    pkgs = options.build.options(key)
     global pool
     pool = eventlet.coros.CoroutinePool(max_size=len(pkgs))
     for pkg in pkgs:
         if pkg not in ignore:
-            pool.execute(grab_unpack, pkg, config, key)
+            pool.execute(grab_unpack, pkg, options, key)
     pool.wait_all()
 
     # remove below?
@@ -181,9 +229,11 @@ def get_sources(options, key="postgis", ignore=['cbase']):
         lpath.remove()
 
 
-
-def grab_unpack(name, config, section, src=path("./src").abspath()):
-    url = config.get(section, name)
+def grab_unpack(name, options, section, src=path("./src").abspath()):
+    """
+    Concurrency friendly download and unpacker.
+    """
+    url = options.conf_get(section, name)
     cache = path('build')
     filename = url.split("/")[-1]
     dl_path = cache.abspath() / filename
@@ -193,13 +243,19 @@ def grab_unpack(name, config, section, src=path("./src").abspath()):
     eventlet.api.sleep(0)
     source_path = tarball_unpack(dl_path, src, True)
     eventlet.api.sleep(0)
-    config.set("sources", name, source_path.abspath())
+    options.conf_set("sources", name, source_path.abspath())
 
 
 @task
 @save_config
 @needs(['get_sources'])
 def install_postgis(options):
+    """
+    Installs postgis per definition in build.ini:[postgis].
+    
+    [postgis]cbase are installed first, then postgres and postgis,
+    then gdal again w/ postgres bindings
+    """
     for pkg in options.conf_get('postgis', 'cbase').split():
         basic_install(pkg)
     basic_install("readline")
@@ -216,6 +272,12 @@ def install_postgis(options):
 
 
 def mkdir(dirname):
+    """
+    Task maker for creating tasks to safely creating directories
+
+    mkdir(path_to_dir_that_needs_to_exist)
+    
+    """
     def dirmaker(options):
         if not isinstance(dirname, path):
             tdir = path(options.env) / dirname
@@ -228,10 +290,12 @@ make_var = mkdir('var')
 make_src = mkdir('src')
 
 
-
 @task
 @needs('make_var')
 def pg_after_install(options):
+    """
+    Sets up a basic postgres data dir and checks for a postgres user.
+    """
     # set up postgres user
     try:
         pguserid = pwd.getpwnam('postgres')[2]
@@ -249,21 +313,32 @@ def pg_after_install(options):
             raise
     call_task('setup_cmds')
 
-
-
+def add_pg_user():
+    info("ATTENTION: You must add your own postgres user manually")
+    sys.exit()
 
 @task
-def start_pg(options=options, logfile=default_pglog):
+def start_pg(options=options, logfile=default_pglog, wait=True):
+    """
+    Starts postgres
+
+    logfile: logfile you wish pg to use
+    wait:    wait until postgres is accepting connections to exit
+    """
     if wait_for_port(5432, 2, exit=False):
         info("posgres is running")
     else:
         cmd = "pg_ctl -D %s -l %s start" \
               %(options.env / path('var') / 'pgdata', default_pglog)
         sh_pg(cmd)
-        wait_for_port(5432)
+        if wait is True:
+            wait_for_port(5432)
 
 
 def wait_for_port(port, timeout=20, exit=True):
+    """
+    Attempts to connect to 'port' until timeout is up
+    """
     state = bag()
     state.connected = False
     def dowait(state=state):
@@ -291,6 +366,10 @@ def wait_for_port(port, timeout=20, exit=True):
 
 @task
 def stop_pg(options=options, restart=False, mode='fast'):
+    """
+    Stops postgres according to 'mode'.  If 'restart' is set to true,
+    'restarts'
+    """
     action = "stop"
     if restart is True:
         action = "restart"
@@ -301,9 +380,17 @@ def stop_pg(options=options, restart=False, mode='fast'):
         wait_for_port(5432)
 
 def sh_pg(cmd):
+    """
+    Executes a subproccess call as the user 'postgres'
+    """
     return subprocess.call("sudo -u postgres %s" %cmd, shell=True)
 
 def get_dbs_and_users(pg=None):
+    """
+    Uses sqlalchemy engine 'pg' to introspect database and return list
+    of databases and users
+    """
+    call_task('install_psyco_pg')
     if pg is None:
         pg = sqla.create_engine('postgres://postgres@0.0.0.0:5432')
     with close(pg.connect()):
@@ -313,13 +400,27 @@ def get_dbs_and_users(pg=None):
         res = pg.execute(sql.text('select * from pg_database'))
         with close(res) as dres:
             dbs = dict([x[:2] for x in dres])
-
     return dbs, users,
-    
+
+
 @task
-@needs('start_pg')
+def install_psyco_pg(options):
+    """
+    installs pyscopg2 postgres bindings via pip
+    """
+    try:
+        import psycopg2
+    except ImportError:
+        sh("pip install psycopg2")
+        import psycopg2
+
+        
+@task
+@needs('webapp_ez', 'start_pg')
 def setup_cmds(options):
-    config = options.config.parser
+    """
+    Sets up all needed sql and ddl bits for postgis
+    """
     user = options.conf_get('pg', 'user')
     password = options.conf_get('pg', 'password')
     loafdb = options.conf_get('pg', 'dbname')
@@ -339,13 +440,13 @@ def setup_cmds(options):
 
     if names & check != check:
         info("Adding spatial_ref_sys.sql and postgis.sql")
-        sh_pg('psql -d template_postgis -f %s' %(path(config.get('sources', 'postgis')) / path('postgis') / 'postgis.sql'))
-        sh_pg('psql -d template_postgis -f %s' %(path(config.get('sources', 'postgis')) / 'spatial_ref_sys.sql'))
+        sh_pg('psql -d template_postgis -f %s' %(path(options.conf_get('sources', 'postgis')) / path('postgis') / 'postgis.sql'))
+        sh_pg('psql -d template_postgis -f %s' %(path(options.conf_get('sources', 'postgis')) / 'spatial_ref_sys.sql'))
         sh_pg('psql -d template_postgis -c "GRANT ALL ON geometry_columns TO PUBLIC;"')
         sh_pg('psql -d template_postgis -c "GRANT ALL ON spatial_ref_sys TO PUBLIC;"')
-    
+
     if not user in users:
-        info('adding user %s' %user)
+        info('Adding user %s' %user)
         cmd = "CREATE USER %s WITH PASSWORD '%s'" %(user, password)
         sh_pg('psql -d template_postgis -c "%s"' %cmd)
         sh_pg('psql -d template1 -c "%s"' %cmd)
@@ -353,7 +454,10 @@ def setup_cmds(options):
 
 @task
 @needs('setup_cmds')
-def create_loafdb(options):
+def create_db(options):
+    """
+    Creates database for application
+    """
     loafdb = options.conf_get('pg', 'dbname')
     dbs, users = get_dbs_and_users()
     if not dbs.has_key(loafdb):
@@ -374,47 +478,31 @@ def get_option(config, section, opt, default=None):
 
 
 def basic_install(pkg, extra2="", options=options, clean=False, force=False):
+    """
+    Does a basic configure; make; make install with local environment
+    as prefix (and referencing local environment for include and lib
+    directories)
+    """
     # use config.status to determine whether to rerun?
-    config = options.config.parser
     pred = options.env
-    src = path(config.get('sources', pkg))
-    extra = get_option(config, 'install_options', pkg, "")
+    src = path(options.conf_get('sources', pkg))
+    extra = options.conf_get('install_options', pkg, default="")
     if force is True:
         config.remove_option('installed', pkg)
-    if get_option(config, "installed", pkg) is None:
+    if options.config.conf_get( "installed", pkg, default=None) is None:
         with pushd(src) as root:
             sh("./configure LDFLAGS=-L%s CPPFLAGS=-I%s --prefix=%s %s %s" %(str(path(pred) / 'lib'), str(path(pred) / 'include'), pred, extra, extra2))
             if clean:
                 sh("make clean")
             sh("make")
             sh("make install")
-        config.set('installed', pkg, True)
+        options.conf_set('installed', pkg, True)
         call_task("save_cfg")
 
 @task
 @needs(['auto'])
 def save_cfg(options):
-    options.config.parser.write(open(options.config.ini, 'w'))
-
-def task_all_loaded(*needed):
-    def all_wrap(f):
-        @task
-        @needs(needed)
-        @wraps(f)
-        def wrapper(*args, **kw):
-            if ALL_TASKS_LOADED:
-                return f(*args, **kw)
-            else:
-                raise ValueError("Cannot run if all commands are not loaded")
-        return wrapper
-    return all_wrap
-
-
-@task_all_loaded('generate_setup', 'minilib', 'setuptools.command.sdist')
-def sdist():
-    """Overrides sdist to make sure that our setup.py is generated."""
-    pass
-
+    options.config.state.write(open(options.config.state_ini, 'w'))
 
 @task
 def after_bootstrap(options):
@@ -428,7 +516,10 @@ def git_it(name, address):
 
 @task
 def go_git_js(options):
-    for name in parser.options('git'):
+    """
+    Grab javascript off of github
+    """
+    for name in options.build.options('git'):
         address = options.conf_get('git', name)
         info("gitting %s @ %s" %(name, address))
         git_it(name, address)
@@ -440,6 +531,7 @@ def move_overwrite(source, dest_folder):
         dest.unlink()
     path(source).move(dest_folder)
 
+
 @task
 def build_js_for_ti(options):
     sh("jsbuild -us loaf.js shared/build.cfg")
@@ -448,11 +540,42 @@ def build_js_for_ti(options):
 
 
 @task
+def webapp_ez(options):
+    """
+    TG has a few deps that do not pip install!? but will install via
+    easy_install
+    """
+    with open('ez.txt', 'r') as ez:
+        for line in ez:
+            sh("easy_install %s" %line)
+
+
+def test_import(pkg):
+    try:
+        __import__(pkg)
+        return True
+    except ImportError:
+        return False
+
+
+@task
 @save_config
-@needs("create_loafdb")
+@needs("create_db", "webapp_ez")
 def setup_webapp(options):
-    sh("pip install -e git+%s#egg=%s" %(options.webapp_url, options.webapp_pkg))
-    if options.conf_getbool('installed','app_setup'):
+    """
+    Installs necessary dependencies for web application and runs
+    webapp setup
+    """
+    if not test_import('tgext.geo'):
+        sh("pip install -r tgext.geo.txt")
+        
+    try:
+        import loafapp
+    except ImportError:
+        sh("pip install -r tg.txt")
+        sh("pip install -e git+%s#egg=%s" %(options.webapp_url, options.webapp_pkg))
+        
+    if options.conf_getboolean('installed','app_setup'):
         info("Skipping TG setup")
     else:
         with pushd(options.env / path('src') / path(options.webapp_pkg)):
@@ -470,6 +593,9 @@ def get_app_dbstr(options=options):
 @save_config
 @needs('start_pg')
 def drop_webapp_tables(options):
+    """
+    Convenience task for dropping tables for webapp
+    """
     pkg = options.webapp_pkg.lower()
     model = __import__('%s.model' %pkg, fromlist=[pkg])
     eng = sqla.create_engine(get_app_dbstr())
@@ -486,23 +612,23 @@ def drop_webapp_tables(options):
 @needs('setup_webapp')
 def add_test_data(options):
     """
-    Load a few test paths.  This ought to be flaggable and data/config
-    driven.
+    Load a few test points.
+
+    @@This ought to have a 'from file' flag and data/config driven.
     """
-    from loafapp.model import DBSession, Path
+    from loafapp.model import DBSession, Spot
     from geoalchemy import WKTSpatialElement
     from loafapp.config.environment import load_environment
     import transaction
     eng = sqla.create_engine(get_app_dbstr())
     DBSession.configure(bind=eng)
-    wkt = "LINESTRING(-80.3 38.2, -81.03 38.04, -81.2 37.89)"
-    path1 = Path(name="My Bike Route", width=6, geom=WKTSpatialElement(wkt))
-    wkt = "LINESTRING(-79.8 38.5, -80.03 38.2, -80.2 37.89)"
-    path2 = Path(name="George Ave", width=8, geom=WKTSpatialElement(wkt))
-    DBSession.add_all([path1, path2])
+    wkt = "POINT(-80.3 38.2, -81.03 38.04)"
+    spot1 = Spot(name="My Bike Route", width=6, geom=WKTSpatialElement(wkt))
+    wkt = "POINT(-79.8 38.5, -80.03 38.2)"
+    spot2 = Spot(name="George Ave", width=8, geom=WKTSpatialElement(wkt))
+    DBSession.add_all([spot1, spot2])
     DBSession.flush()
     transaction.commit()
-
 
 try:
     # Optional tasks, only needed for development
@@ -518,6 +644,7 @@ except ImportError, e:
     debug(str(e))
     ALL_TASKS_LOADED = False
 
+
 try:
     import eventlet.api
     import eventlet.coros
@@ -526,7 +653,6 @@ try:
     from sqlalchemy import sql
     from urlgrabber.grabber import urlgrab, URLGrabError
     from urlgrabber.progress import text_progress_meter
-
 except ImportError:
     info("Some libraries needed by the build not loaded")
 
