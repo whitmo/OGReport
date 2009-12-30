@@ -15,14 +15,6 @@
       <barColor>#000</barColor>
       <fullscreen>false</fullscreen>
     </window>
-    <window>
-      <id>second</id>
-      <url>index.html</url>
-      <backgroundColor>#111</backgroundColor>
-      <icon>ti://featured</icon>
-      <barColor>#000</barColor>
-      <fullscreen>false</fullscreen>
-    </window>
   </windows>
   <guid>5d5e4591b8494d54bf2490b92288d6da</guid>
 </ti:app>
