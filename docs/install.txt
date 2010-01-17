@@ -35,19 +35,32 @@ To build PostGIS::
 
 $ paver install_postgis
 
+This will install and setup postgres and postgis.  Based on the values
+in './build.ini', a database and user will be created from the postgis
+template.
 
 
-
-The Build
-=========
+The Build's Design and Future Directions
+========================================
 
 One the primary reusable pieces of OGReport is the build for PostGIS,
 Postgres, GEOS and friends and a basic environment for working with
 PostGIS and python.
 
-The build uses the 'eventlet' networking library to speed up
-downloads and do some basic checking for connections with reasonable
-timeouts.
+Eventlet
+--------
+
+The build uses the 'eventlet' networking library to speed up downloads
+and do some basic checking for connections with reasonable timeouts.
+This dependency could be removed, but it works for me and my slow
+connection.
+
+Improvements
+------------
+
+Currently, 'build.ini' is a file in version control w/ the package
+itself.  To allow for more flexibility and reuse, the paver script
+should take an argument for an explicit config file.
 
 
 Errata / Debugging
