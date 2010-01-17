@@ -4,7 +4,7 @@ PasteDeploy
 geoalchemy
 sqlalchemy
 repoze.debug
-github-tools
+#github-tools
 nose
 #Sphinx
 virtualenv
