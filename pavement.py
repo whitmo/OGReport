@@ -62,7 +62,8 @@ setup(
 options(
     # -*- Paver options: -*-
     config = Bunch(ini = path('build.ini'),
-                   state_ini = path('build_state.ini')),
+                   state_ini = path('build_state.ini'),
+                   required_sections = ['sources', 'installed']),
     env = path('.').abspath(),
     minilib=Bunch(
         extra_files=['virtual']
@@ -103,6 +104,9 @@ def auto(options):
     cp.read(options.config.ini)
     state.read(options.config.state_ini)
 
+    for sect in options.required_sections:
+        if not state.has_section(sect):
+            state.add_section(sect)
     options.config.state = state
     options.config.build = cp
 
@@ -117,7 +121,7 @@ def auto(options):
         try:
             for parser in cp, state,:
                 if parser.has_section(section):
-                    return getattr(parser, getter)(*args, **kw)
+                    return getattr(parser, getter)(*args)
         except ConfigParser.NoOptionError:
             default = kw.get('default', None)
             if default is not None:
@@ -188,6 +192,8 @@ def tarball_unpack(fpath, dest, overwrite=False):
 
     @return
         name of folder created by unpacking
+
+    This task could improve by adding md5 checking
     """
     dest = path(dest)
     filename = fpath.split("/")[-1]
@@ -421,7 +427,7 @@ def install_psyco_pg(options):
 
         
 @task
-@needs('webapp_ez', 'start_pg')
+@needs('start_pg')
 def setup_cmds(options):
     """
     Sets up all needed sql and ddl bits for postgis
@@ -494,7 +500,7 @@ def basic_install(pkg, extra2="", options=options, clean=False, force=False):
     extra = options.conf_get('install_options', pkg, default="")
     if force is True:
         config.remove_option('installed', pkg)
-    if options.config.conf_get( "installed", pkg, default=None) is None:
+    if options.conf_get( "installed", pkg, default=None) is None:
         with pushd(src) as root:
             sh("./configure LDFLAGS=-L%s CPPFLAGS=-I%s --prefix=%s %s %s" %(str(path(pred) / 'lib'), str(path(pred) / 'include'), pred, extra, extra2))
             if clean:
@@ -554,15 +560,15 @@ def move_overwrite(source, dest_folder):
 ##     move_overwrite('IOL.js', 'Resources')
 
 
-@task
-def webapp_ez(options):
-    """
-    TG has a few deps that do not pip install!? but will install via
-    easy_install
-    """
-    with open('ez.txt', 'r') as ez:
-        for line in ez:
-            sh("easy_install %s" %line)
+## @task
+## def webapp_ez(options):
+##     """
+##     TG has a few deps that do not pip install!? but will install via
+##     easy_install
+##     """
+##     with open('ez.txt', 'r') as ez:
+##         for line in ez:
+##             sh("easy_install %s" %line)
 
 
 def test_import(pkg):
@@ -585,7 +591,7 @@ def setup_webapp(options):
         sh("pip install -r tgext.geo.txt")
         
     try:
-        import ogreportapp
+        import loafapp
     except ImportError:
         sh("pip install -r tg.txt")
         sh("pip install -e git+%s#egg=%s" %(options.webapp_url, options.webapp_pkg))
@@ -646,9 +652,9 @@ def add_test_data(options):
 
     @@This ought to have a 'from file' flag and data/config driven.
     """
-    from ogreportapp.model import DBSession, Spot
+    from loafapp.model import DBSession, Spot
     from geoalchemy import WKTSpatialElement
-    from ogreportapp.config.environment import load_environment
+    from loafapp.config.environment import load_environment
     import transaction
     eng = sqla.create_engine(get_app_dbstr())
     DBSession.configure(bind=eng)
