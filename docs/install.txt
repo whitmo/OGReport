@@ -1,0 +1,87 @@
+==============
+ Installation
+==============
+
+
+
+Basic Use
+=========
+
+The package is designed to be a self contained build for the backend web application.
+
+To get started, clone OGReporter and run the bootstrap::
+
+$ git clone git://github.com/whitmo/OGReport.git ogreport
+$ cd ogreport
+$ python2.6 bootstrap.py
+
+
+This will create the virtualenv that will act as your development
+environment. If you wish to use this system with virtualenvwrapper,
+see instructions below. If you are not using virtualenvwrapper, you
+must activate the environment to access the installed scripts and
+sandboxed python that will be doing the building.
+
+$ . bin/activate  # aka source bin/activate
+
+The full set of paver commands that compose the build are available
+now. These can come in handy if you need to re-run just part of the
+build.  You can also add your own commands in pavement.py. Take a
+look::
+
+$ paver help
+
+To build PostGIS::
+
+$ paver install_postgis
+
+
+
+
+The Build
+=========
+
+One the primary reusable pieces of OGReport is the build for PostGIS,
+Postgres, GEOS and friends and a basic environment for working with
+PostGIS and python.
+
+The build uses the 'eventlet' networking library to speed up
+downloads and do some basic checking for connections with reasonable
+timeouts.
+
+
+Errata / Debugging
+==================
+
+* Incompletely unpacked packages
+
+  If the building of a c package fails with an error about a missing
+  file, erase it and it's tarball from the src directory and re-run
+  the build.
+
+  If the problem persists, you can retrigger the download, unpacking
+  and building of a package by erasing references to it in the
+  following places::
+
+  ./build
+  ./build_state.ini
+  ./src
+
+
+Using w/ virtualenv wrapper
+===========================
+
+The excellent virtualenvwrapper from Doug Hellman allows for a nice
+way to work and manage your development, python or otherwhise.
+
+To fully use OGReport with virtualenvwrapper (and benefit from any
+postactivate or hooks), you will need to add a couple steps to the
+normal build and setup.
+
+$ git clone git://github.com/whitmo/OGReport.git $WORKON_HOME/ogreport
+$ cd $WORKON_HOME/ogreport
+$ python2.6 bootstrap.py
+$ mkvirtualenv --python=python2.6 ogreport
+$ workon ogreport
+
+
