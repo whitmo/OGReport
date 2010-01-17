@@ -40,15 +40,15 @@ entry_points="""
 
 # compatible with distutils of python 2.3+ or later
 setup(
-    name='loaf',
+    name='OGReport',
     version=version,
-    description='gotta make bread if you want crumbs',
+    description='Simple mobile reporting stack',
     long_description=open('README.rst', 'r').read(),
     classifiers=classifiers,
     keywords='',
     author='whit',
-    author_email='whit @ nocoast.us',
-    url='http://www.whitmorriss.org/loaf',
+    author_email='d.w.morriss@gmail.com',
+    url='http://www.opengeo.org',
     license='BSD',
     packages = find_packages(exclude=['bootstrap', 'pavement',]),
     include_package_data=True,
@@ -64,9 +64,7 @@ options(
                    state_ini = path('build_state.ini')),
     env = path('.').abspath(),
     minilib=Bunch(
-        extra_files=[
-            # -*- Minilib extra files: -*-
-            ]
+        extra_files=['virtual']
         ),
     sphinx=Bunch(
         docroot='docs',
@@ -82,7 +80,7 @@ options(
     )
 
 options.setup.package_data = paver.setuputils.find_package_data(
-    'loaf', package='loaf', only_in_packages=False)
+    'ogreport', package='ogreport', only_in_packages=False)
 
 bag = type('bag', (object,), {})
 
@@ -423,7 +421,7 @@ def setup_cmds(options):
     """
     user = options.conf_get('pg', 'user')
     password = options.conf_get('pg', 'password')
-    loafdb = options.conf_get('pg', 'dbname')
+    ogreportdb = options.conf_get('pg', 'dbname')
 
     dbs, users = get_dbs_and_users()
     if not dbs.has_key("template_postgis"):
@@ -458,16 +456,16 @@ def create_db(options):
     """
     Creates database for application
     """
-    loafdb = options.conf_get('pg', 'dbname')
+    ogreportdb = options.conf_get('pg', 'dbname')
     dbs, users = get_dbs_and_users()
-    if not dbs.has_key(loafdb):
+    if not dbs.has_key(ogreportdb):
         stop_pg(mode='immediate') # disconnect any users
         start_pg()
-        cmd = 'createdb -T template_postgis %s' %loafdb
+        cmd = 'createdb -T template_postgis %s' %ogreportdb
         info(cmd)
         sh_pg(cmd)
     else:
-        info("%s exists" %loafdb)
+        info("%s exists" %ogreportdb)
                    
 
 def get_option(config, section, opt, default=None):
@@ -534,7 +532,7 @@ def move_overwrite(source, dest_folder):
 
 @task
 def build_js_for_ti(options):
-    sh("jsbuild -us loaf.js shared/build.cfg")
+    sh("jsbuild -us ogreport.js shared/build.cfg")
     move_overwrite('OpenLayers.js', 'Resources')
     move_overwrite('IOL.js', 'Resources')
 
@@ -570,7 +568,7 @@ def setup_webapp(options):
         sh("pip install -r tgext.geo.txt")
         
     try:
-        import loafapp
+        import ogreportapp
     except ImportError:
         sh("pip install -r tg.txt")
         sh("pip install -e git+%s#egg=%s" %(options.webapp_url, options.webapp_pkg))
@@ -616,9 +614,9 @@ def add_test_data(options):
 
     @@This ought to have a 'from file' flag and data/config driven.
     """
-    from loafapp.model import DBSession, Spot
+    from ogreportapp.model import DBSession, Spot
     from geoalchemy import WKTSpatialElement
-    from loafapp.config.environment import load_environment
+    from ogreportapp.config.environment import load_environment
     import transaction
     eng = sqla.create_engine(get_app_dbstr())
     DBSession.configure(bind=eng)
@@ -648,10 +646,9 @@ except ImportError, e:
 try:
     import eventlet.api
     import eventlet.coros
-    import eventlet.processes as proc
     import sqlalchemy as sqla
     from sqlalchemy import sql
-    from urlgrabber.grabber import urlgrab, URLGrabError
+    from urlgrabber.grabber import urlgrab
     from urlgrabber.progress import text_progress_meter
 except ImportError:
     info("Some libraries needed by the build not loaded")
