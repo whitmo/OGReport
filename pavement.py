@@ -10,6 +10,7 @@ except ImportError:
 
 from functools import wraps, update_wrapper
 from paver.setuputils import setup
+from paver import doctools
 from paver.tasks import Task
 from setuptools import find_packages
 import ConfigParser
@@ -156,6 +157,7 @@ def save_config(func):
         return ret
     return wrapper
 
+
 def pm(func):
     """
     Debugging decorator.  Use like so to do postmortem debugging::
@@ -172,7 +174,6 @@ def pm(func):
         except Exception, e:
             import pdb, sys; pdb.post_mortem(sys.exc_info()[2])
     return wrap
-            
 
 
 def tarball_unpack(fpath, dest, overwrite=False):
@@ -207,8 +208,8 @@ def tarball_unpack(fpath, dest, overwrite=False):
 
 
 @task
-@save_config
 @needs('make_src')
+@save_config
 def get_sources(options, key="postgis", ignore=['cbase']):
     """
     Uses 'grab_unpack' to download source files concurrently.
@@ -245,8 +246,8 @@ def grab_unpack(name, options, section, src=path("./src").abspath()):
 
 
 @task
-@save_config
 @needs(['get_sources'])
+@save_config
 def install_postgis(options):
     """
     Installs postgis per definition in build.ini:[postgis].
@@ -269,7 +270,7 @@ def install_postgis(options):
     call_task('pg_after_install')
 
 
-def mkdir(dirname):
+def mkdir(dirname, options=options):
     """
     Task maker for creating tasks to safely creating directories
 
@@ -282,6 +283,7 @@ def mkdir(dirname):
         if not tdir.exists():
             tdir.mkdir()
     dirmaker.__name__ = "make_%s" %dirname
+    dirmaker.__doc__ = "Non destructively create directory %s" %path(path(options.env) / dirname).abspath()
     return Task(dirmaker)
 
 make_var = mkdir('var')
@@ -311,9 +313,11 @@ def pg_after_install(options):
             raise
     call_task('setup_cmds')
 
+
 def add_pg_user():
     info("ATTENTION: You must add your own postgres user manually")
     sys.exit()
+
 
 @task
 def start_pg(options=options, logfile=default_pglog, wait=True):
@@ -362,6 +366,7 @@ def wait_for_port(port, timeout=20, exit=True):
 
     return state.connected
 
+
 @task
 def stop_pg(options=options, restart=False, mode='fast'):
     """
@@ -377,11 +382,13 @@ def stop_pg(options=options, restart=False, mode='fast'):
     if restart is True:
         wait_for_port(5432)
 
+
 def sh_pg(cmd):
     """
     Executes a subproccess call as the user 'postgres'
     """
     return subprocess.call("sudo -u postgres %s" %cmd, shell=True)
+
 
 def get_dbs_and_users(pg=None):
     """
@@ -497,14 +504,23 @@ def basic_install(pkg, extra2="", options=options, clean=False, force=False):
         options.conf_set('installed', pkg, True)
         call_task("save_cfg")
 
+
 @task
 @needs(['auto'])
 def save_cfg(options):
+    """
+    Write the build_state.ini to preserve information about the build
+    """
     options.config.state.write(open(options.config.state_ini, 'w'))
+
 
 @task
 def after_bootstrap(options):
+    """
+    Install basic build reqs after bootstrap.py runs
+    """
     sh("bin/pip install -r reqs.txt")
+
 
 def git_it(name, address):
     src = path('src')
@@ -512,15 +528,16 @@ def git_it(name, address):
         with pushd(src):
             sh("git clone %s %s" %(address, name))
 
-@task
-def go_git_js(options):
-    """
-    Grab javascript off of github
-    """
-    for name in options.build.options('git'):
-        address = options.conf_get('git', name)
-        info("gitting %s @ %s" %(name, address))
-        git_it(name, address)
+
+## @task
+## def go_git_js(options):
+##     """
+##     Grab javascript off of github
+##     """
+##     for name in options.build.options('git'):
+##         address = options.conf_get('git', name)
+##         info("gitting %s @ %s" %(name, address))
+##         git_it(name, address)
 
 
 def move_overwrite(source, dest_folder):
@@ -530,11 +547,11 @@ def move_overwrite(source, dest_folder):
     path(source).move(dest_folder)
 
 
-@task
-def build_js_for_ti(options):
-    sh("jsbuild -us ogreport.js shared/build.cfg")
-    move_overwrite('OpenLayers.js', 'Resources')
-    move_overwrite('IOL.js', 'Resources')
+## @task
+## def build_js_for_ti(options):
+##     sh("jsbuild -us ogreport.js shared/build.cfg")
+##     move_overwrite('OpenLayers.js', 'Resources')
+##     move_overwrite('IOL.js', 'Resources')
 
 
 @task
@@ -557,8 +574,8 @@ def test_import(pkg):
 
 
 @task
-@save_config
 @needs("create_db", "webapp_ez")
+@save_config
 def setup_webapp(options):
     """
     Installs necessary dependencies for web application and runs
@@ -588,8 +605,8 @@ def get_app_dbstr(options=options):
 
 
 @task
-@save_config
 @needs('start_pg')
+@save_config
 def drop_webapp_tables(options):
     """
     Convenience task for dropping tables for webapp
@@ -603,11 +620,26 @@ def drop_webapp_tables(options):
         info("Dropped Tables")
     options.conf_set('installed', 'app_setup', str(False))
 
+@task
+def install_sphinx(options):
+    """
+    Install sphinx if not available
+    """
+    try:
+        import sphinx
+    except ImportError:
+        sh('pip install sphinx')
 
 @task
+@needs("install_sphinx")
+def html(options):
+    call_task("paver.doctools.html")
+
+html.__doc__ = doctools.html.__doc__
+
+@task
+@needs('start_pg', 'setup_webapp')
 @save_config
-@needs('start_pg')
-@needs('setup_webapp')
 def add_test_data(options):
     """
     Load a few test points.
