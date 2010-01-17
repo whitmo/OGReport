@@ -1,6 +1,4 @@
-gotta make bread if you want crumbs
-
-Copyright (c) 2009, whit
+Copyright (c) 2009, OpenGeo
 All rights reserved.
 
 
