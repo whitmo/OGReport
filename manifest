@@ -1,8 +1,8 @@
-#appname: loaf
+#appname: OGReport
 #publisher: whit
-#url: http://are.youdown.com/with/loaf
+#url: http://opengeo.org
 #image: appicon.png
-#appid: com.youdown.loaf
+#appid: org.opengeo.ogreport
 #desc: undefined
 #type: mobile
-#guid: 1cbe6b88-c0dc-42e3-aea8-bc8dcafcb545
+#guid: bc005a54-92d5-45a0-ac85-e9a7f41332f5
