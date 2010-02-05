@@ -19,3 +19,5 @@ virtual-env/*
 var/*
 man/*
 src/*
+share/*
+build_state.ini
