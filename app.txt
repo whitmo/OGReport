@@ -1,4 +1,4 @@
 -e hg+http://bitbucket.org/gawel/gpfileupload/#egg=gpfileupload
 http://svn.featureserver.org/trunk/featureserver#egg=featureserver
-
-
+zope.sqlalchemy
+repoze.tm2
