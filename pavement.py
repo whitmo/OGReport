@@ -36,8 +36,9 @@ classifiers = [
 install_requires = []
 
 entry_points="""
-    # -*- Entry points: -*-
-    """
+[paste.app_factory]
+main = ogreport.app:make_app
+"""
 
 # compatible with distutils of python 2.3+ or later
 setup(
@@ -60,7 +61,7 @@ setup(
     )
 
 options(
-    # -*- Paver options: -*-
+    app_ini = "dev.ini",
     config = Bunch(ini = path('build.ini'),
                    state_ini = path('build_state.ini'),
                    required_sections = ['sources', 'installed']),
@@ -317,7 +318,7 @@ def pg_after_install(options):
         except :
             pgdata.rmdir()
             raise
-    call_task('setup_cmds')
+    call_task('setup_postgis')
 
 
 def add_pg_user():
@@ -428,7 +429,7 @@ def install_psyco_pg(options):
         
 @task
 @needs('start_pg')
-def setup_cmds(options):
+def setup_postgis(options):
     """
     Sets up all needed sql and ddl bits for postgis
     """
@@ -464,7 +465,7 @@ def setup_cmds(options):
 
 
 @task
-@needs('setup_cmds')
+@needs('setup_postgis')
 def create_db(options):
     """
     Creates database for application
@@ -580,35 +581,40 @@ def test_import(pkg):
 
 
 @task
-@needs("create_db", "webapp_ez")
+@needs("create_db")
 @save_config
 def setup_webapp(options):
     """
     Installs necessary dependencies for web application and runs
     webapp setup
     """
-    if not test_import('tgext.geo'):
-        sh("pip install -r tgext.geo.txt")
-        
-    try:
-        import loafapp
-    except ImportError:
-        sh("pip install -r tg.txt")
-        sh("pip install -e git+%s#egg=%s" %(options.webapp_url, options.webapp_pkg))
+    if not test_import('gp.fileupload'):
+        sh("pip install -r app.txt")
+
+    if not test_import('ogreport'):
+        call_task("setuptools.command.develop")
         
     if options.conf_getboolean('installed','app_setup'):
-        info("Skipping TG setup")
+        info("Skipping webapp setup. Edit build_state.ini and if rerun is necessary.")
     else:
-        with pushd(options.env / path('src') / path(options.webapp_pkg)):
-            sh("paster setup-app development.ini")
+        from ogreport import model
+        import transaction as txn
+
+        model.metadata.create_all(bind=app_engine(options))
         options.conf_set('installed','app_setup', str(True))
 
 
-def get_app_dbstr(options=options):
-    cp = ConfigParser.ConfigParser()
-    cp.read([options.app_path / options.webapp_dev_ini])
-    return cp.get("app:main", "sqlalchemy.url")
+def load_app_config(options):
+    from paste.deploy.loadwsgi import ConfigLoader
+    loader = ConfigLoader(path(options.app_ini).abspath())
+    return loader.app_context().config()
 
+
+def app_engine(options):
+    from ogreport import app
+    config = load_app_config(options)
+    return app.engine_from_config(config)
+    
 
 @task
 @needs('start_pg')
@@ -617,14 +623,14 @@ def drop_webapp_tables(options):
     """
     Convenience task for dropping tables for webapp
     """
-    pkg = options.webapp_pkg.lower()
-    model = __import__('%s.model' %pkg, fromlist=[pkg])
-    eng = sqla.create_engine(get_app_dbstr())
+    from ogreport import model
+    eng = app_engine()
     with close(eng.connect()) as cxn:
         model.metadata.bind = cxn
         model.metadata.drop_all()
         info("Dropped Tables")
     options.conf_set('installed', 'app_setup', str(False))
+
 
 @task
 def install_sphinx(options):
