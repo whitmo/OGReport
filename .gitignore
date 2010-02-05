@@ -10,6 +10,7 @@ build
 build/*
 development.db
 dist/*
+*.egg-info
 docs/_build/doctrees/*
 include
 lib
